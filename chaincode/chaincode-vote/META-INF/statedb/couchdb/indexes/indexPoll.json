@@ -1,0 +1,11 @@
+{
+    "index": {
+        "fields": [
+            "id",
+            "pollTableID"
+        ]
+    },
+    "ddoc": "indexPollDoc",
+    "name": "indexPoll",
+    "type": "json"
+}
