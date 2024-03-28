@@ -9,8 +9,9 @@
 - npm:
   https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
 ## set up network
+
 ```
-  cd network/
+  cd HLF-Network/network/
 ```
 
 first, bring down the network if it was up
