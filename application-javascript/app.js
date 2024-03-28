@@ -31,7 +31,7 @@ const express = require('express');
 
 // Create an Express application
 const app = express();
-const port = 3000; // Port number to listen on
+const port = 3001; // Port number to listen on
 app.use(express.json()); // Middleware to parse JSON bodies
 
 
