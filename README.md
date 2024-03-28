@@ -2,29 +2,61 @@
 ### Getting Started
 
 ## prerequisite:
-install docker:https://docs.docker.com/engine/install/ubuntu/
-
-install jq:​​ sudo apt-get install jq
-
+ - docker:
+  install docker:https://docs.docker.com/engine/install/ubuntu/
+- jp:
+  install jq:​​ sudo apt-get install jq
+- npm:
+  https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
 ## set up network
-cd network/
+```
+  cd network/
+```
 
-# first, bring down the network
-./network.sh down
+first, bring down the network if it was up
+```
+  ./network.sh down
+```
+then bring up the network
+```
+  ./network.sh up -ca -s couchdb 
+```
+now, you have bring up the network with two organizations, each with two peer nodes, and an order organization with one order nodes!
+this network uses couchdb as the world state database, and it uses fabric CA to issue enrollment certificates and TLS .
+create the channel for transaction
+```
+  ./network.sh createChannel -c transcationchannel
+```
+create the channel for vote
+```
+  ./network.sh createChannel -c votechannel
+```
+now you have created two channels, and all the organzations within the network has joined in both channels.
+create the smart contract for transactions, this smart contract is named 'transaction'
+```
+  ./network.sh deployCC -ccn transaction -c transcationchannel -ccp ../chaincode/chaincode-transaction/ -ccl javascript -ccep "OR('Org1MSP.peer','Org2MSP.peer')"
 
-# bring up the network and create the channel for transactions
-./network.sh up createChannel -c transcationchannel -s couchdb -ca
+```
+create the smart contract for vote, this smart contract is named 'vote'
+```
+  ./network.sh deployCC -ccn vote -c votechannel -ccp ../chaincode/chaincode-vote/ -ccl javascript -ccep "OR('Org1MSP.peer','Org2MSP.peer')"
 
-# deploy smart contract 
-./network.sh deployCC -ccn ledger -c transcationchannel -ccp ../chaincode/chaincode-transaction/ -ccl javascript -ccep "OR('Org1MSP.peer','Org2MSP.peer')"
+```
+now, we have deployed the smart contracts to the channels and the peer nodes.
 
-# Set CLI and config paths
-export PATH=${PWD}/../bin:$PATH
-export FABRIC_CFG_PATH=$PWD/../config/
+we are done setting up the network!
 
-# Environment variables for Org1
-export CORE_PEER_TLS_ENABLED=true
-export CORE_PEER_LOCALMSPID="Org1MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
-export CORE_PEER_ADDRESS=localhost:7051
+## set the gateway service server
+```
+  cd ../application-javascript/
+```
+```
+  npm install
+```
+```
+  node app.js
+```
+now the server is runnig on localhost:3000
+
+# author:
+Qi Zoey Zhou
