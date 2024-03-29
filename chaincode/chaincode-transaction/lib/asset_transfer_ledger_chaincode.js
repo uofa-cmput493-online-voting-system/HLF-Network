@@ -1,71 +1,3 @@
-/*
- * Copyright IBM Corp. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
-*/
-
-// ====CHAINCODE EXECUTION SAMPLES (CLI) ==================
-
-// ==== Invoke assets ====
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["CreateAsset","asset1","blue","35","Tom","100"]}'
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["CreateAsset","asset2","red","50","Tom","150"]}'
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["CreateAsset","asset3","blue","70","Tom","200"]}'
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["TransferAsset","asset2","jerry"]}'
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["TransferAssetByColor","blue","jerry"]}'
-// peer chaincode invoke -C CHANNEL_NAME -n asset_transfer -c '{"Args":["DeleteAsset","asset1"]}'
-
-// ==== Query assets ====
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["ReadAsset","asset1"]}'
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["GetAssetsByRange","asset1","asset3"]}'
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["GetAssetHistory","asset1"]}'
-
-// Rich Query (Only supported if CouchDB is used as state database):
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["QueryAssetsByOwner","Tom"]}' output issue
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["QueryAssets","{\"selector\":{\"owner\":\"Tom\"}}"]}'
-
-// Rich Query with Pagination (Only supported if CouchDB is used as state database):
-// peer chaincode query -C CHANNEL_NAME -n asset_transfer -c '{"Args":["QueryAssetsWithPagination","{\"selector\":{\"owner\":\"Tom\"}}","3",""]}'
-
-// INDEXES TO SUPPORT COUCHDB RICH QUERIES
-//
-// Indexes in CouchDB are required in order to make JSON queries efficient and are required for
-// any JSON query with a sort. Indexes may be packaged alongside
-// chaincode in a META-INF/statedb/couchdb/indexes directory. Each index must be defined in its own
-// text file with extension *.json with the index definition formatted in JSON following the
-// CouchDB index JSON syntax as documented at:
-// http://docs.couchdb.org/en/2.3.1/api/database/find.html#db-index
-//
-// This asset transfer ledger example chaincode demonstrates a packaged
-// index which you can find in META-INF/statedb/couchdb/indexes/indexOwner.json.
-//
-// If you have access to the your peer's CouchDB state database in a development environment,
-// you may want to iteratively test various indexes in support of your chaincode queries.  You
-// can use the CouchDB Fauxton interface or a command line curl utility to create and update
-// indexes. Then once you finalize an index, include the index definition alongside your
-// chaincode in the META-INF/statedb/couchdb/indexes directory, for packaging and deployment
-// to managed environments.
-//
-// In the examples below you can find index definitions that support asset transfer ledger
-// chaincode queries, along with the syntax that you can use in development environments
-// to create the indexes in the CouchDB Fauxton interface or a curl command line utility.
-//
-
-// Index for docType, owner.
-//
-// Example curl command line to define index in the CouchDB channel_chaincode database
-// curl -i -X POST -H "Content-Type: application/json" -d "{\"index\":{\"fields\":[\"docType\",\"owner\"]},\"name\":\"indexOwner\",\"ddoc\":\"indexOwnerDoc\",\"type\":\"json\"}" http://hostname:port/myc1_assets/_index
-//
-
-// Index for docType, owner, size (descending order).
-//
-// Example curl command line to define index in the CouchDB channel_chaincode database
-// curl -i -X POST -H "Content-Type: application/json" -d "{\"index\":{\"fields\":[{\"size\":\"desc\"},{\"docType\":\"desc\"},{\"owner\":\"desc\"}]},\"ddoc\":\"indexSizeSortDoc\", \"name\":\"indexSizeSortDesc\",\"type\":\"json\"}" http://hostname:port/myc1_assets/_index
-
-// Rich Query with index design doc and index name specified (Only supported if CouchDB is used as state database):
-//   peer chaincode query -C CHANNEL_NAME -n ledger -c '{"Args":["QueryAssets","{\"selector\":{\"docType\":\"asset\",\"owner\":\"Tom\"}, \"use_index\":[\"_design/indexOwnerDoc\", \"indexOwner\"]}"]}'
-
-// Rich Query with index design doc specified only (Only supported if CouchDB is used as state database):
-//   peer chaincode query -C CHANNEL_NAME -n ledger -c '{"Args":["QueryAssets","{\"selector\":{\"docType\":{\"$eq\":\"asset\"},\"owner\":{\"$eq\":\"Tom\"},\"size\":{\"$gt\":0}},\"fields\":[\"docType\",\"owner\",\"size\"],\"sort\":[{\"size\":\"desc\"}],\"use_index\":\"_design/indexSizeSortDoc\"}"]}'
 
 'use strict';
 
@@ -74,8 +6,8 @@ const { Contract } = require('fabric-contract-api');
 class Chaincode extends Contract {
 
 	// CreateAsset - create a new asset, store into chaincode state
-	async CreateTransaction(ctx, assetID, transaction_type, poll_table_id, user_id, time_stamp) {
-		const exists = await this.AssetExists(ctx, assetID);
+	async CreatePoll(ctx, assetID, poll_table_id, user_id, time_stamp) {
+		const exists = await this.TransactionExists(ctx, assetID);
 		if (exists) {
 			throw new Error(`The asset ${assetID} already exists`);
 		}
@@ -84,7 +16,7 @@ class Chaincode extends Contract {
 		let asset = {
 			docType: 'asset',
 			assetID: assetID,
-			transcationType: transaction_type,
+			transcationType: 'create',
 			pollTableID: poll_table_id,
 			userID: user_id,
 			timeStamp: time_stamp,
@@ -118,7 +50,7 @@ class Chaincode extends Contract {
 			throw new Error('Transaction name must not be empty');
 		}
 
-		let exists = await this.AssetExists(ctx, id);
+		let exists = await this.TransactionExists(ctx, id);
 		if (!exists) {
 			throw new Error(`Asset ${id} does not exist`);
 		}
@@ -150,51 +82,63 @@ class Chaincode extends Contract {
 		await ctx.stub.deleteState(pollIDIndexKey);
 	}
 
-	// TransferAsset transfers a asset by setting a new owner name on the asset
-	// this was transferset(ctx, assetName, newOwner)
-	async UpdateTransaction(ctx, assetName, newState) {
+	async UpdatePoll(ctx, pid, newState) {
 
-		let transactionAsBytes = await ctx.stub.getState(assetName);
+		let transactionAsBytes = await ctx.stub.getState(pid);
 		if (!transactionAsBytes || !transactionAsBytes.toString()) {
-			throw new Error(`Asset ${assetName} does not exist`);
+			throw new Error(`Asset ${pid} does not exist`);
 		}
 		let t_to_update = {};
 		try {
 			t_to_update = JSON.parse(transactionAsBytes.toString()); //unmarshal
 		} catch (err) {
 			let jsonResp = {};
-			jsonResp.error = 'Failed to decode JSON of: ' + assetName;
+			jsonResp.error = 'Failed to decode JSON of: ' + pid;
 			throw new Error(jsonResp);
+		}
+		if (t_to_update.transcationType === 'end') {
+			throw new Error(`Poll table ${pid} is already in state ${newState}, update is not allowed`);
+		}
+		if (t_to_update.transcationType === newState) {
+			throw new Error(`Poll table ${pid} is already in state ${newState}`);
+		}
+		if (newState === 'vote') {
+			throw new Error(`Should AddVoteTransaction instead of UpdatePoll for poll ${pid}`);
 		}
 		t_to_update.transcationType = newState; //change 
 
 		let transactionJSONasBytes = Buffer.from(JSON.stringify(t_to_update));
-		await ctx.stub.putState(assetName, transactionJSONasBytes); //rewrite the asset
+		await ctx.stub.putState(pid, transactionJSONasBytes); //rewrite the asset
 	}
 
-	// // GetAssetsByRange performs a range query based on the start and end keys provided.
-	// // Read-only function results are not typically submitted to ordering. If the read-only
-	// // results are submitted to ordering, or if the query is used in an update transaction
-	// // and submitted to ordering, then the committing peers will re-execute to guarantee that
-	// // result sets are stable between endorsement time and commit time. The transaction is
-	// // invalidated by the committing peers if the result set has changed between endorsement
-	// // time and commit time.
-	// // Therefore, range queries are a safe option for performing update transactions based on query results.
-	// async GetAssetsByRange(ctx, startKey, endKey) {
+	async AddVoteTransaction(ctx, pid, user_id) {
+		let exist = await this.TransactionForUserOnPollExist(ctx, pid, user_id);
+		if (exist) {
+			throw new Error(`User ${user_id} already voted for poll ${pid}`);
+		}
+		let transactionAsBytes = await ctx.stub.getState(pid);
+		if (!transactionAsBytes || !transactionAsBytes.toString()) {
+			throw new Error(`Poll Table ${pid} does not exist`);
+		}
+		let t_to_update = {};
+		try {
+			t_to_update = JSON.parse(transactionAsBytes.toString()); //unmarshal
+		} catch (err) {
+			let jsonResp = {};
+			jsonResp.error = 'Failed to decode JSON of: ' + pid;
+			throw new Error(jsonResp);
+		}
+		if (t_to_update.transcationType === 'end') {
+			throw new Error(`Poll table ${pid} is already in end state, cannot add more transactions`);
+		}
+		t_to_update.transcationType = 'vote'; //change 
+		t_to_update.user_id = user_id;
 
-	// 	let resultsIterator = await ctx.stub.getStateByRange(startKey, endKey);
-	// 	let results = await this._GetAllResults(resultsIterator, false);
+		let transactionJSONasBytes = Buffer.from(JSON.stringify(t_to_update));
+		await ctx.stub.putState(pid, transactionJSONasBytes); //rewrite the asset
+	}
 
-	// 	return JSON.stringify(results);
-	// }
 
-	// TransferAssetByColor will transfer assets of a given color to a certain new owner.
-	// Uses a GetStateByPartialCompositeKey (range query) against color~name 'index'.
-	// Committing peers will re-execute range queries to guarantee that result sets are stable
-	// between endorsement time and commit time. The transaction is invalidated by the
-	// committing peers if the result set has changed between endorsement time and commit time.
-	// Therefore, range queries are a safe option for performing update transactions based on query results.
-	// Example: GetStateByPartialCompositeKey/RangeQuery
 	async UpdateTransactionByPoll(ctx, pollTableID, newState) {
 		// Query the color~name index by color
 		// This will execute a key range query on all keys starting with 'color'
@@ -218,7 +162,7 @@ class Chaincode extends Contract {
 
 			// Now call the transfer function for the found asset.
 			// Re-use the same function that is used to transfer individual assets
-			await this.UpdateTransaction(ctx, returnedAssetName, newState);
+			await this.UpdatePoll(ctx, returnedAssetName, newState);
 			responseRange = await pollResultsIterator.next();
 		}
 	}
@@ -236,6 +180,21 @@ class Chaincode extends Contract {
 		return await this.GetQueryResultForQueryString(ctx, JSON.stringify(queryString)); //shim.success(queryResults);
 	}
 
+	async QueryTransactionByPollAndUser(ctx, pollTableID, uid) {
+		let queryString = {};
+		queryString.selector = {};
+		queryString.selector.docType = 'asset';
+		queryString.selector.pollTableID = pollTableID;
+		queryString.selector.userID = uid;
+		return await this.GetQueryResultForQueryString(ctx, JSON.stringify(queryString)); //shim.success(queryResults);
+	}
+
+
+	async TransactionForUserOnPollExist(ctx, pollTableID, uid) {
+		let result = await this.QueryTransactionByPollAndUser(ctx, pollTableID, uid);
+		return result && result.length > 2;
+	}
+
 	// Example: Ad hoc rich query
 	// QueryAssets uses a query string to perform a query for assets.
 	// Query string matching state database syntax is passed in and executed as is.
@@ -246,8 +205,6 @@ class Chaincode extends Contract {
 		return await this.GetQueryResultForQueryString(ctx, queryString);
 	}
 
-	// GetQueryResultForQueryString executes the passed in query string.
-	// Result set is built and returned as a byte array containing the JSON results.
 	async GetQueryResultForQueryString(ctx, queryString) {
 
 		let resultsIterator = await ctx.stub.getQueryResult(queryString);
@@ -255,50 +212,7 @@ class Chaincode extends Contract {
 
 		return JSON.stringify(results);
 	}
-
-	// // Example: Pagination with Range Query
-	// // GetAssetsByRangeWithPagination performs a range query based on the start & end key,
-	// // page size and a bookmark.
-	// // The number of fetched records will be equal to or lesser than the page size.
-	// // Paginated range queries are only valid for read only transactions.
-	// async GetAssetsByRangeWithPagination(ctx, startKey, endKey, pageSize, bookmark) {
-
-	// 	const { iterator, metadata } = await ctx.stub.getStateByRangeWithPagination(startKey, endKey, pageSize, bookmark);
-	// 	let results = {};
-
-	// 	results.results = await this._GetAllResults(iterator, false);
-
-	// 	results.fetchedRecordsCount = metadata.fetchedRecordsCount;
-
-	// 	results.bookmark = metadata.bookmark;
-
-	// 	return JSON.stringify(results);
-	// }
-
-	// Example: Pagination with Ad hoc Rich Query
-	// QueryAssetsWithPagination uses a query string, page size and a bookmark to perform a query
-	// for assets. Query string matching state database syntax is passed in and executed as is.
-	// The number of fetched records would be equal to or lesser than the specified page size.
-	// Supports ad hoc queries that can be defined at runtime by the client.
-	// If this is not desired, follow the QueryAssetsForOwner example for parameterized queries.
-	// Only available on state databases that support rich query (e.g. CouchDB)
-	// Paginated queries are only valid for read only transactions.
-	// async QueryAssetsWithPagination(ctx, queryString, pageSize, bookmark) {
-
-	// 	const { iterator, metadata } = await ctx.stub.getQueryResultWithPagination(queryString, pageSize, bookmark);
-	// 	let results = {};
-
-	// 	results.results = await this._GetAllResults(iterator, false);
-
-	// 	results.fetchedRecordsCount = metadata.fetchedRecordsCount;
-
-	// 	results.bookmark = metadata.bookmark;
-
-	// 	return JSON.stringify(results);
-	// }
-
-	// GetAssetHistory returns the chain of custody for an asset since issuance.
-	async GetAssetHistory(ctx, assetName) {
+	async GetPollTableHistory(ctx, assetName) {
 
 		let resultsIterator = await ctx.stub.getHistoryForKey(assetName);
 		let results = await this._GetAllResults(resultsIterator, true);
@@ -306,8 +220,8 @@ class Chaincode extends Contract {
 		return JSON.stringify(results);
 	}
 
-	// AssetExists returns true when asset with given ID exists in world state
-	async AssetExists(ctx, assetName) {
+	// TransactionExists returns true when asset with given ID exists in world state
+	async TransactionExists(ctx, assetName) {
 		// ==== Check if asset already exists ====
 		let assetState = await ctx.stub.getState(assetName);
 		return assetState && assetState.length > 0;
@@ -350,6 +264,7 @@ class Chaincode extends Contract {
 		return allResults;
 	}
 
+
 	// InitLedger creates sample assets in the ledger
 	async InitLedger(ctx) {
 		const assets = [
@@ -363,7 +278,7 @@ class Chaincode extends Contract {
 		];
 
 		for (const asset of assets) {
-			await this.CreateTransaction(
+			await this.CreatePoll(
 				ctx,
 				asset.assetID,
 				asset.transcationType,
@@ -376,9 +291,3 @@ class Chaincode extends Contract {
 }
 
 module.exports = Chaincode;
-// peer chaincode query - C mychannel - n ledger - c '{"Args":["QueryTransactionByPoll", "{\"selector\":{\"docType\":\"asset\",\"pollTableID\":\"35\"}}"]}'
-// // peer chaincode query -C mychannel -n ledger -c '{"Args":["InitLedger"]}'
-// // peer chaincode invoke - C mychannel - n ledger - c '{"Args":["CreateTransaction","1","create","35","UID999","100"]}'
-// peer chaincode invoke - o localhost: 7050 --ordererTLSHostnameOverride orderer.example.com--tls--cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" - C mychannel - n ledger - c '{"Args":["CreateTransaction","1","create","35","UID999","100"]}'
-// peer chaincode invoke - o localhost: 7050 --ordererTLSHostnameOverride orderer.example.com--tls--cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" - C mychannel - n ledger - c '{"Args":["UpdateTransactionByPoll","35","vote"]}'
-// peer chaincode query - C mychannel - n ledger - c '{"Args":["QueryTransactionByPoll","35"]}'
