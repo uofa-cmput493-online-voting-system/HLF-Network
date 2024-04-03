@@ -227,7 +227,7 @@ async function QueryVoteByPoll(pollTableID) {
 
 		console.log('\n--> Evaluate Transaction: QueryVoteByPoll, function returns an vote with a given pollTableID');
 		let result = await contract.evaluateTransaction('QueryVoteByPoll', pollTableID);
-		return prettyJSONString(result.toString());
+		return JSON.parse(result.toString());
 
 	} finally {
 		// Disconnect from the gateway when the application is closing
@@ -328,13 +328,7 @@ app.post('/update-poll', async (req, res) => {
 app.get('/votes', async (req, res) => {
 	try {
 		const pollID = req.query.pollID;
-		let a = await QueryVoteByPoll(pollID);
-
-		// Extract data from the request and prepare the response
-		const responseData = {
-			message: `*** Result:${a}`,
-			timestamp: new Date()
-		};
+		let responseData = await QueryVoteByPoll(pollID);
 
 		// Send the response
 		res.json(responseData);
