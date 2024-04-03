@@ -54,7 +54,7 @@ async function QueryTransactionByPoll(pollTableID) {
 
 		console.log('\n--> Evaluate Transaction: QueryTransactionByPoll, function returns an asset with a given assetID');
 		let result = await contract.evaluateTransaction('QueryTransactionByPoll', pollTableID);
-		return prettyJSONString(result.toString());
+		return JSON.parse(result.toString());
 
 	} finally {
 		// Disconnect from the gateway when the application is closing
