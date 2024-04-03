@@ -180,10 +180,10 @@ class Chaincode extends Contract {
 		return await this.GetQueryResultForQueryString(ctx, JSON.stringify(queryString)); //shim.success(queryResults);
 	}
 
-	async QueryTransactionByPollAndUser(ctx, pollTableID, uid) {
+	async QueryVoteTransactionByPollAndUser(ctx, pollTableID, uid) {
 		let queryString = {};
 		queryString.selector = {};
-		queryString.selector.docType = 'asset';
+		queryString.selector.transcationType = 'vote';
 		queryString.selector.pollTableID = pollTableID;
 		queryString.selector.userID = uid;
 		return await this.GetQueryResultForQueryString(ctx, JSON.stringify(queryString)); //shim.success(queryResults);
@@ -191,7 +191,7 @@ class Chaincode extends Contract {
 
 
 	async TransactionForUserOnPollExist(ctx, pollTableID, uid) {
-		let result = await this.QueryTransactionByPollAndUser(ctx, pollTableID, uid);
+		let result = await this.QueryVoteTransactionByPollAndUser(ctx, pollTableID, uid);
 		return result && result.length > 2;
 	}
 
