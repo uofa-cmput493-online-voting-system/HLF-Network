@@ -153,6 +153,12 @@ async function UpdatePoll(pid, newState) {
 		console.log("result submitted ****");
 		return "Transaction Created Successfully";
 
+	} catch (error) {
+		if (error.message.includes('is already in state')) {
+			const error = new Error('The poll is already in the requested state.');
+			error.code = "POLL_STATUS";
+			throw error;
+		}
 	} finally {
 		// Disconnect from the gateway when the application is closing
 		// This will close all connections to the network
@@ -331,13 +337,15 @@ app.post('/update-poll', async (req, res) => {
 			message: `*** Result:${result}`,
 			timestamp: new Date()
 		};
-
 		// Send the response
 		res.json(responseData);
 	} catch (error) {
-		// Handle any errors that occur during the asynchronous operation
-		console.error('An error occurred:', error);
-		res.status(500).json({ error: 'Internal Server Error' });
+		if (error.code === "POLL_STATUS") {
+			res.status(411).json({ error: error.code });
+		} else {
+			console.error('An error occurred:', error);
+			res.status(500).json({ error: 'Internal Server Error' });
+		}
 	}
 });
 
