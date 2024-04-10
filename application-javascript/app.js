@@ -114,6 +114,16 @@ async function AddVoteTransaction(pid, user_id) {
 		console.log("result submitted ****");
 		return "Transaction Created Successfully";
 
+	} catch (error) {
+		if (error.message.includes('already voted for poll')) {
+			const error = new Error('You have already voted for this poll.');
+			error.code = "ALREADY_VOTED";
+			throw error;
+		} else if (error.message.includes('end')) {
+			const error = new Error('The poll has already ended.');
+			error.code = "POLL_ENDED";
+			throw error;
+		}
 	} finally {
 		// Disconnect from the gateway when the application is closing
 		// This will close all connections to the network
@@ -143,6 +153,12 @@ async function UpdatePoll(pid, newState) {
 		console.log("result submitted ****");
 		return "Transaction Created Successfully";
 
+	} catch (error) {
+		if (error.message.includes('is already in state')) {
+			const error = new Error('The poll is already in the requested state.');
+			error.code = "POLL_STATUS";
+			throw error;
+		}
 	} finally {
 		// Disconnect from the gateway when the application is closing
 		// This will close all connections to the network
@@ -296,9 +312,16 @@ app.post('/add-transaction-vote', async (req, res) => {
 		// Send the response
 		res.json(responseData);
 	} catch (error) {
-		// Handle any errors that occur during the asynchronous operation
-		console.error('An error occurred:', error);
-		res.status(500).json({ error: 'Internal Server Error' });
+		if (error.code === "ALREADY_VOTED") {
+			res.status(409).json({ error: error.code });
+		} else if (error.code === "POLL_ENDED") {
+			res.status(410).json({ error: error.code });
+		}
+		else {
+			// Handle any errors that occur during the asynchronous operation
+			console.error('An error occurred:', error);
+			res.status(500).json({ error: 'Internal Server Error' });
+		}
 	}
 });
 
@@ -314,13 +337,15 @@ app.post('/update-poll', async (req, res) => {
 			message: `*** Result:${result}`,
 			timestamp: new Date()
 		};
-
 		// Send the response
 		res.json(responseData);
 	} catch (error) {
-		// Handle any errors that occur during the asynchronous operation
-		console.error('An error occurred:', error);
-		res.status(500).json({ error: 'Internal Server Error' });
+		if (error.code === "POLL_STATUS") {
+			res.status(411).json({ error: error.code });
+		} else {
+			console.error('An error occurred:', error);
+			res.status(500).json({ error: 'Internal Server Error' });
+		}
 	}
 });
 
