@@ -1,3 +1,6 @@
+// FR24 - Chaincode: Chaincode (smart contracts) shall be deployed to validate transaction and store voter choices against predefined rules before they are added to the blockchain
+// FR26 - Block.Structure: Transaction on the blockchain shall be structured to include the following data: transaction ID, timestamp, transaction type (e.g. vote choice, poll table transaction log, poll ended), foreign key to the poll table, and encrypted payload. A hash of the preceding block shall also be included in the new block to ensure chain integrity.
+
 'use strict';
 
 const { Contract } = require('fabric-contract-api');
